@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>অর্থনীতি ও ব্যাংকিং সংবাদ</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:sans-serif;background:#f3f6f4;color:#1b1b1b;line-height:1.5}
+#top{position:sticky;top:0;z-index:10;background:#0b5d3b;color:#fff}
+#hd{display:flex;align-items:center;justify-content:space-between;padding:10px 12px}
+#hd h1{font-size:17px;font-weight:bold}
+#sig{background:#d00000;color:#fff;font-size:11px;font-weight:bold;padding:3px 8px;border-radius:4px}
+#tabs{display:flex;background:#094a2f;overflow-x:auto;white-space:nowrap}
+.tab{flex:0 0 auto;text-align:center;padding:10px 14px;font-size:14px;color:#cfe8dc;border-bottom:3px solid transparent}
+.tab.on{color:#fff;font-weight:bold;border-bottom-color:#ffd400}
+#bar{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;font-size:12px;color:#555}
+#rf{background:#0b5d3b;color:#fff;border:0;border-radius:6px;padding:6px 12px;font-size:13px}
+#list{padding:0 10px 30px}
+.card{background:#fff;border-radius:8px;padding:10px 12px;margin-bottom:8px;box-shadow:0 1px 2px rgba(0,0,0,.08);display:block;text-decoration:none;color:inherit}
+.card .t{font-size:15px;font-weight:bold}
+.card .m{font-size:12px;color:#666;margin-top:4px}
+.card .m b{color:#0b5d3b}
+.sec{font-size:14px;font-weight:bold;color:#0b5d3b;margin:12px 2px 6px}
+.btns{display:flex;gap:8px;margin-bottom:6px}
+.btns a{flex:1;text-align:center;background:#0b5d3b;color:#fff;text-decoration:none;padding:9px 4px;border-radius:6px;font-size:13px}
+.msg{background:#fff3cd;color:#664d03;border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:8px}
+.ld{text-align:center;color:#666;padding:20px;font-size:14px}
+</style>
+</head>
+<body>
+<div id="top">
+  <div id="hd"><h1>অর্থনীতি ও ব্যাংকিং সংবাদ</h1><span id="sig">@A.M.MORSHED</span></div>
+  <div id="tabs"></div>
+</div>
+<div id="bar"><span id="upd">—</span><button id="rf" type="button">রিফ্রেশ</button></div>
+<div id="list"></div>
+
+<script>
+var GNB = 'https://news.google.com/rss/search?hl=bn&gl=BD&ceid=BD:bn&q=';
+var GNE = 'https://news.google.com/rss/search?hl=en-US&gl=US&ceid=US:en&q=';
+var BB_CIRC = 'https://www.bb.org.bd/en/index.php/mediaroom/circular';
+var BB_HOME = 'https://www.bb.org.bd';
+var BLOCK = /facebook\.|youtube\.|youtu\.be|twitter\.|x\.com|tiktok\.|instagram\.|reddit\.|t\.me|linkedin\./i;
+
+var TABS = [
+  {id:'bb', name:'বাংলাদেশ ব্যাংক', feeds:[
+    GNB + encodeURIComponent('বাংলাদেশ ব্যাংক সার্কুলার OR নির্দেশনা OR প্রজ্ঞাপন when:7d'),
+    GNB + encodeURIComponent('বাংলাদেশ ব্যাংক when:2d'),
+    GNE + encodeURIComponent('"Bangladesh Bank" when:3d')
+  ]},
+  {id:'desh', name:'দেশী ব্যাংক ও অর্থনীতি', feeds:[
+    GNB + encodeURIComponent('ব্যাংক OR অর্থনীতি OR রিজার্ভ OR ডলার OR মূল্যস্ফীতি when:2d'),
+    GNE + encodeURIComponent('Bangladesh (bank OR economy OR inflation OR remittance) (site:thedailystar.net OR site:tbsnews.net OR site:financialexpress.com.bd OR site:dhakatribune.com) when:2d')
+  ]},
+  {id:'bdesh', name:'দেশী বাণিজ্য', feeds:[
+    GNB + encodeURIComponent('বাণিজ্য OR রপ্তানি OR আমদানি OR শিল্প OR এলসি OR পোশাক খাত when:2d'),
+    GNE + encodeURIComponent('Bangladesh (trade OR export OR import OR commerce OR garment OR industry) (site:thedailystar.net OR site:tbsnews.net OR site:financialexpress.com.bd OR site:dhakatribune.com) when:2d')
+  ]},
+  {id:'bbid', name:'বিদেশী বাণিজ্য', feeds:[
+    GNE + encodeURIComponent('(global trade OR tariffs OR exports OR imports OR supply chain OR commerce) (site:reuters.com OR site:bloomberg.com OR site:ft.com OR site:cnbc.com OR site:bbc.com OR site:wsj.com) when:1d'),
+    GNB + encodeURIComponent('আন্তর্জাতিক বাণিজ্য OR শুল্ক OR বিশ্ববাজার OR তেলের দাম when:2d')
+  ]},
+  {id:'bidesh', name:'বিদেশী ব্যাংক ও অর্থনীতি', feeds:[
+    GNE + encodeURIComponent('(central bank OR banking OR global economy OR interest rates) (site:reuters.com OR site:bloomberg.com OR site:ft.com OR site:cnbc.com OR site:bbc.com OR site:wsj.com) when:1d'),
+    GNB + encodeURIComponent('ফেডারেল রিজার্ভ OR বিশ্বব্যাংক OR আইএমএফ OR বৈশ্বিক অর্থনীতি when:2d')
+  ]}
+];
+
+var cur = 'bb';
+var loadId = 0;
+var lastErr = '';
+
+function bn(n){ return String(n).replace(/[0-9]/g, function(d){ return '০১২৩৪৫৬৭৮৯'.charAt(d); }); }
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function ago(ts){
+  var m = Math.floor((Date.now() - ts) / 60000);
+  if (m < 1) return 'এইমাত্র';
+  if (m < 60) return bn(m) + ' মিনিট আগে';
+  var h = Math.floor(m / 60);
+  if (h < 24) return bn(h) + ' ঘণ্টা আগে';
+  return bn(Math.floor(h / 24)) + ' দিন আগে';
+}
+function lsGet(k){ try { return localStorage.getItem(k); } catch(e){ return null; } }
+function lsSet(k,v){ try { localStorage.setItem(k, v); } catch(e){} }
+
+function timeout(p, ms){
+  return new Promise(function(res, rej){
+    var t = setTimeout(function(){ rej(new Error('timeout')); }, ms);
+    p.then(function(v){ clearTimeout(t); res(v); }, function(e){ clearTimeout(t); rej(e); });
+  });
+}
+function getText(url){
+  return timeout(fetch(url).then(function(r){
+    if (!r.ok) throw new Error('http ' + r.status);
+    return r.text();
+  }), 12000);
+}
+function viaProxy(url){
+  var chain = [
+    url,
+    'https://api.allorigins.win/raw?url=' + encodeURIComponent(url),
+    'https://corsproxy.io/?' + encodeURIComponent(url)
+  ];
+  var i = 0;
+  function next(){
+    if (i >= chain.length) return Promise.reject(new Error('proxy failed'));
+    var u = chain[i++];
+    return getText(u).then(function(t){
+      if (!t || t.length < 50) throw new Error('empty');
+      return t;
+    }).catch(next);
+  }
+  return next();
+}
+
+function parseRss(xml){
+  var doc = new DOMParser().parseFromString(xml, 'text/xml');
+  var nodes = doc.getElementsByTagName('item');
+  var out = [];
+  for (var i = 0; i < nodes.length; i++){
+    var n = nodes[i];
+    var g = function(tag){ var e = n.getElementsByTagName(tag)[0]; return e ? e.textContent : ''; };
+    var title = g('title').trim();
+    var src = g('source').trim();
+    var link = g('link').trim();
+    var ts = Date.parse(g('pubDate')) || 0;
+    if (!src){
+      var k = title.lastIndexOf(' - ');
+      if (k > 0){ src = title.substring(k + 3); }
+    }
+    var se = n.getElementsByTagName('source')[0];
+    var dom = '';
+    if (se && se.getAttribute('url')){ dom = se.getAttribute('url').replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/^www\./, ''); }
+    var k2 = title.lastIndexOf(' - ');
+    if (k2 > 0 && src && title.substring(k2 + 3) === src){ title = title.substring(0, k2); }
+    if (!title || !link) continue;
+    if (BLOCK.test(link) || BLOCK.test(src)) continue;
+    out.push({title:title, link:link, src:src, dom:dom, ts:ts});
+  }
+  return out;
+}
+
+function loadFeed(url){
+  return viaProxy(url).then(parseRss).catch(function(){
+    return getText('https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(url)).then(function(t){
+      var j = JSON.parse(t);
+      var out = [];
+      (j.items || []).forEach(function(it){
+        var title = (it.title || '').trim(), src = '';
+        var k = title.lastIndexOf(' - ');
+        if (k > 0){ src = title.substring(k + 3); title = title.substring(0, k); }
+        if (!title || !it.link || BLOCK.test(it.link) || BLOCK.test(src)) return;
+        out.push({title:title, link:it.link, src:src, ts:Date.parse((it.pubDate || '').replace(' ', 'T') + 'Z') || 0});
+      });
+      return out;
+    });
+  });
+}
+
+function loadNews(tab){
+  return Promise.all(tab.feeds.map(function(u){ return loadFeed(u).catch(function(e){ lastErr = (e && e.message) ? e.message : String(e); return []; }); })).then(function(arr){
+    var all = [], seen = {};
+    arr.forEach(function(a){ a.forEach(function(x){
+      var key = x.title.toLowerCase().substring(0, 70);
+      if (seen[key]) return;
+      seen[key] = 1; all.push(x);
+    }); });
+    all.sort(function(a, b){ return b.ts - a.ts; });
+    return all.slice(0, 40);
+  });
+}
+
+function loadCirculars(){
+  return viaProxy(BB_CIRC).then(function(html){
+    var doc = new DOMParser().parseFromString(html, 'text/html');
+    var as = doc.getElementsByTagName('a'), out = [], seen = {};
+    for (var i = 0; i < as.length; i++){
+      var h = as[i].getAttribute('href') || '';
+      var t = (as[i].textContent || '').replace(/\s+/g, ' ').trim();
+      if (t.length < 8 || !/\.pdf|circular|\/cir/i.test(h)) continue;
+      var full;
+      try { full = new URL(h, BB_CIRC).href; } catch(e){ continue; }
+      if (seen[full]) continue;
+      seen[full] = 1;
+      out.push({title:t, link:full});
+      if (out.length >= 15) break;
+    }
+    return out;
+  });
+}
+
+function cardHtml(x, i){
+  var meta = '';
+  if (x.src) meta += 'সূত্র: <b>' + esc(x.src) + '</b>' + (x.dom && x.dom !== x.src ? ' (' + esc(x.dom) + ')' : '');
+  else if (x.link) meta += 'সূত্র: <b>' + esc(x.link.replace(/^https?:\/\//, '').replace(/\/.*$/, '')) + '</b>';
+  if (x.ts) meta += (meta ? ' · ' : '') + ago(x.ts);
+  return '<a class="card" target="_blank" rel="noopener" href="' + esc(x.link) + '"><div class="t">' + bn(i + 1) + '। ' + esc(x.title) + '</div>' + (meta ? '<div class="m">' + meta + '</div>' : '') + '</a>';
+}
+
+function setUpd(txt){ document.getElementById('upd').textContent = txt; }
+
+function render(tabId, news, circ, note){
+  var h = '';
+  if (tabId === 'bb'){
+    h += '<div class="sec">অফিসিয়াল সাইট</div><div class="btns"><a target="_blank" rel="noopener" href="' + BB_CIRC + '">সার্কুলার</a><a target="_blank" rel="noopener" href="' + BB_HOME + '">বাংলাদেশ ব্যাংক</a></div>';
+    h += '<div class="sec">সর্বশেষ সার্কুলার (bb.org.bd)</div>';
+    if (circ && circ.length){ h += circ.map(cardHtml).join(''); }
+    else { h += '<div class="msg">সার্কুলারের তালিকা এখন আনা যায়নি। উপরের "সার্কুলার" বোতামে চাপ দিয়ে সরাসরি দেখুন।</div>'; }
+    h += '<div class="sec">বাংলাদেশ ব্যাংক সংক্রান্ত সংবাদ</div>';
+  }
+  if (note){ h += '<div class="msg">' + esc(note) + '</div>'; }
+  if (news && news.length){ h += news.map(cardHtml).join(''); }
+  else if (!note){ h += '<div class="msg">এখন কোনো সংবাদ পাওয়া যায়নি।</div>'; }
+  document.getElementById('list').innerHTML = h;
+}
+
+function show(tabId, force){
+  cur = tabId;
+  var id = ++loadId;
+  var tab = TABS.filter(function(t){ return t.id === tabId; })[0];
+  var tabsEl = document.getElementsByClassName('tab');
+  for (var i = 0; i < tabsEl.length; i++){ tabsEl[i].className = 'tab' + (tabsEl[i].getAttribute('data-id') === tabId ? ' on' : ''); }
+
+  var cached = null;
+  try { cached = JSON.parse(lsGet('eb_' + tabId) || 'null'); } catch(e){}
+  if (cached && !force){ render(tabId, cached.news, cached.circ, ''); setUpd('সর্বশেষ আপডেট: ' + ago(cached.at)); }
+  else { document.getElementById('list').innerHTML = '<div class="ld">সংবাদ আনা হচ্ছে...</div>'; setUpd('লোড হচ্ছে...'); }
+
+  var pc = tabId === 'bb' ? loadCirculars().catch(function(){ return null; }) : Promise.resolve(null);
+  Promise.all([loadNews(tab), pc]).then(function(r){
+    if (id !== loadId) return;
+    var news = r[0], circ = r[1];
+    if (!news.length && !(circ && circ.length)){
+      if (cached){ render(tabId, cached.news, cached.circ, 'ইন্টারনেট সমস্যা, আগের সংরক্ষিত সংবাদ দেখানো হচ্ছে।'); }
+      else { render(tabId, [], null, 'সংবাদ আনা যায়নি। ইন্টারনেট সংযোগ দেখে রিফ্রেশ চাপুন।' + (lastErr ? ' (কারণ: ' + lastErr + ')' : '')); }
+      setUpd('আপডেট ব্যর্থ');
+      return;
+    }
+    var at = Date.now();
+    lsSet('eb_' + tabId, JSON.stringify({at:at, news:news, circ:circ}));
+    render(tabId, news, circ, '');
+    setUpd('সর্বশেষ আপডেট: এইমাত্র');
+  });
+}
+
+(function init(){
+  var t = '';
+  TABS.forEach(function(x){ t += '<div class="tab" data-id="' + x.id + '">' + x.name + '</div>'; });
+  document.getElementById('tabs').innerHTML = t;
+  var els = document.getElementsByClassName('tab');
+  for (var i = 0; i < els.length; i++){
+    els[i].addEventListener('click', function(){ show(this.getAttribute('data-id'), false); });
+  }
+  document.getElementById('rf').addEventListener('click', function(){ show(cur, true); });
+  setInterval(function(){ show(cur, true); }, 300000);
+  show('bb', false);
+})();
+</script>
+</body>
+</html>
