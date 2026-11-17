@@ -94,7 +94,7 @@ function getText(url){
   return timeout(fetch(url).then(function(r){
     if (!r.ok) throw new Error('http ' + r.status);
     return r.text();
-  }), 12000);
+  }), 10000);
 }
 function viaProxy(url){
   var chain = [
@@ -102,16 +102,19 @@ function viaProxy(url){
     'https://api.allorigins.win/raw?url=' + encodeURIComponent(url),
     'https://corsproxy.io/?' + encodeURIComponent(url)
   ];
-  var i = 0;
-  function next(){
-    if (i >= chain.length) return Promise.reject(new Error('proxy failed'));
-    var u = chain[i++];
-    return getText(u).then(function(t){
-      if (!t || t.length < 50) throw new Error('empty');
-      return t;
-    }).catch(next);
-  }
-  return next();
+  return new Promise(function(resolve, reject){
+    var left = chain.length, errs = [];
+    chain.forEach(function(u, idx){
+      getText(u).then(function(t){
+        if (!t || t.length < 50) throw new Error('empty');
+        resolve(t);
+      }).catch(function(e){
+        errs.push((idx === 0 ? 'direct' : 'proxy' + idx) + ': ' + ((e && e.message) ? e.message : e));
+        left--;
+        if (left === 0) reject(new Error(errs.join(' | ')));
+      });
+    });
+  });
 }
 
 function parseRss(xml){
@@ -142,7 +145,7 @@ function parseRss(xml){
 }
 
 function loadFeed(url){
-  return viaProxy(url).then(parseRss).catch(function(){
+  return viaProxy(url).then(parseRss).catch(function(e1){
     return getText('https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(url)).then(function(t){
       var j = JSON.parse(t);
       var out = [];
@@ -151,9 +154,11 @@ function loadFeed(url){
         var k = title.lastIndexOf(' - ');
         if (k > 0){ src = title.substring(k + 3); title = title.substring(0, k); }
         if (!title || !it.link || BLOCK.test(it.link) || BLOCK.test(src)) return;
-        out.push({title:title, link:it.link, src:src, ts:Date.parse((it.pubDate || '').replace(' ', 'T') + 'Z') || 0});
+        out.push({title:title, link:it.link, src:src, dom:'', ts:Date.parse((it.pubDate || '').replace(' ', 'T') + 'Z') || 0});
       });
       return out;
+    }).catch(function(e2){
+      throw new Error(e1.message + ' | rss2json: ' + ((e2 && e2.message) ? e2.message : e2));
     });
   });
 }
