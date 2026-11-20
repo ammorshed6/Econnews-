@@ -53,18 +53,29 @@ var BB_CIRC = 'https://www.bb.org.bd/en/index.php/mediaroom/circular';
 var BB_HOME = 'https://www.bb.org.bd';
 var BLOCK = /facebook\.|youtube\.|youtu\.be|twitter\.|x\.com|tiktok\.|instagram\.|reddit\.|t\.me|linkedin\./i;
 
+var KW_ECO = /ব্যাংক|অর্থ|টাকা|ডলার|রিজার্ভ|মূল্যস্ফীতি|বাজেট|রাজস্ব|এনবিআর|শেয়ার|পুঁজিবাজার|ঋণ|সুদ|আমানত|বিনিয়োগ|রেমিট্যান্স|প্রবাসী আয়|জিডিপি|বাজার/;
+var KW_TRADE = /বাণিজ্য|রপ্তানি|আমদানি|শুল্ক|এলসি|পোশাক|শিল্প|কারখানা|বন্দর|ব্যবসা|বাজার|দাম|বিনিয়োগ/;
+var KW_BB = /বাংলাদেশ ব্যাংক|কেন্দ্রীয় ব্যাংক|গভর্নর|ব্যাংক/;
+var BBC_BN = 'https://feeds.bbci.co.uk/bengali/rss.xml';
+var DW_BN = 'https://rss.dw.com/xml/rss-bn-all';
 var TABS = [
   {id:'bb', name:'বাংলাদেশ ব্যাংক', feeds:[
     {u:search('বাংলাদেশ ব্যাংক when:3d'), s:''},
-    {u:searchEn('"Bangladesh Bank" when:3d'), s:'', l:'en'}
+    {u:searchEn('"Bangladesh Bank" when:3d'), s:'', l:'en'},
+    {u:BBC_BN, s:'BBC বাংলা', kw:KW_BB},
+    {u:DW_BN, s:'DW বাংলা', kw:KW_BB}
   ]},
   {id:'desh', name:'দেশী ব্যাংক ও অর্থনীতি', feeds:[
     {u:topic('BUSINESS'), s:''},
-    {u:search('ব্যাংক অর্থনীতি রিজার্ভ ডলার when:1d'), s:''}
+    {u:search('ব্যাংক অর্থনীতি রিজার্ভ ডলার when:1d'), s:''},
+    {u:BBC_BN, s:'BBC বাংলা', kw:KW_ECO},
+    {u:DW_BN, s:'DW বাংলা', kw:KW_ECO}
   ]},
   {id:'bdesh', name:'দেশী বাণিজ্য', feeds:[
     {u:search('রপ্তানি OR আমদানি OR বাণিজ্য OR এলসি when:2d'), s:''},
-    {u:searchEn('Bangladesh (export OR import OR trade OR garment) ' + BDSITES + ' when:2d'), s:'', l:'en'}
+    {u:searchEn('Bangladesh (export OR import OR trade OR garment) ' + BDSITES + ' when:2d'), s:'', l:'en'},
+    {u:BBC_BN, s:'BBC বাংলা', kw:KW_TRADE},
+    {u:DW_BN, s:'DW বাংলা', kw:KW_TRADE}
   ]},
   {id:'bbid', name:'বিদেশী বাণিজ্য', feeds:[
     {u:'https://feeds.bbci.co.uk/news/business/rss.xml', s:'BBC News', l:'en'},
@@ -149,11 +160,16 @@ function viaRss2json(url){
 function viaProxy(url){
   return getText('https://api.allorigins.win/raw?url=' + encodeURIComponent(url), 12000).then(parseXml);
 }
+function hostOf(u){ return u.replace(/^https?:\/\//, '').split('/')[0]; }
 function getFeed(f){
   var errs = [];
   var isGN = f.u.indexOf('news.google.com') > -1;
   function note(tag){ return function(e){ errs.push(tag + ': ' + errMsg(e)); throw e; }; }
-  return viaDirect(f.u).catch(note('direct')).catch(function(){ return viaRss2json(f.u).catch(note('rss2json')); })
+  var first = viaDirect(f.u).catch(function(e){
+    if (isGN){ return delay(1800).then(function(){ return viaDirect(f.u); }); }
+    throw e;
+  });
+  return first.catch(note('direct')).catch(function(){ return viaRss2json(f.u).catch(note('rss2json')); })
     .catch(function(){ return viaProxy(f.u).catch(note('proxy')); })
     .then(function(items){
       var out = [];
@@ -167,18 +183,23 @@ function getFeed(f){
         }
         if (!title || !it.link) continue;
         if (BLOCK.test(it.link) || BLOCK.test(src) || BLOCK.test(dom)) continue;
+        if (f.kw && !f.kw.test(title)) continue;
         out.push({title:title, link:it.link, src:src || 'অজ্ঞাত সূত্র', dom:dom, time:it.time, l:f.l === 'en' ? 'en' : 'bn'});
       }
-      return {ok:true, items:out, err:''};
-    }).catch(function(){ return {ok:false, items:[], err:errs.join(' | ')}; });
+      return {ok:true, items:out, err:'', host:hostOf(f.u)};
+    }).catch(function(){ return {ok:false, items:[], err:errs.join(' | '), host:hostOf(f.u)}; });
 }
 
 function loadNews(tab){
-  var jobs = tab.feeds.map(function(f, i){ return delay(i * 300).then(function(){ return getFeed(f); }); });
+  var gn = 0;
+  var jobs = tab.feeds.map(function(f){
+    var d = f.u.indexOf('news.google.com') > -1 ? (gn++) * 900 : 0;
+    return delay(d).then(function(){ return getFeed(f); });
+  });
   return Promise.all(jobs).then(function(rs){
-    var all = [], seen = {}, okc = 0, err = '';
+    var all = [], seen = {}, okc = 0, err = '', fails = [];
     rs.forEach(function(r){
-      if (r.ok) okc++; else if (!err) err = r.err;
+      if (r.ok) okc++; else { if (!err) err = r.err; fails.push(r.host + ' (' + r.err + ')'); }
       r.items.forEach(function(x){
         var key = x.title.toLowerCase().substring(0, 60);
         if (seen[key]) return;
@@ -186,7 +207,7 @@ function loadNews(tab){
       });
     });
     all.sort(function(a, b){ return b.time - a.time; });
-    return {items:all.slice(0, 40), ok:okc, total:rs.length, err:err};
+    return {items:all.slice(0, 40), ok:okc, total:rs.length, err:err, fails:fails.join(' ; ')};
   });
 }
 
@@ -327,7 +348,7 @@ function show(tabId, force){
     lsSet('eb2_' + tabId, JSON.stringify({at:Date.now(), news:res.items, circ:circ}));
     render(tabId, res.items, circ, '');
     setUpd('সর্বশেষ আপডেট: এইমাত্র');
-    setDiag('উৎস চালু: ' + bn(res.ok) + '/' + bn(res.total));
+    setDiag('উৎস চালু: ' + bn(res.ok) + '/' + bn(res.total) + (res.fails ? ' · ব্যর্থ: ' + res.fails : ''));
     runTranslations(id);
   });
 }
