@@ -257,13 +257,32 @@ function loadCirculars(){
   function parse(html){
     var doc = new DOMParser().parseFromString(html, 'text/html');
     var as = doc.getElementsByTagName('a'), out = [], seen = {};
+    var GEN = /^(download|view|pdf|read more|more|click here|circulars?(\/circular letters)?|circular letters?)$/i;
+    function clean(x){ return (x || '').replace(/\s+/g, ' ').replace(/download|ডাউনলোড/ig, '').trim(); }
     for (var i = 0; i < as.length; i++){
       var h = as[i].getAttribute('href') || '';
-      var t = (as[i].textContent || '').replace(/\s+/g, ' ').trim();
-      if (t.length < 8 || !/\.pdf|circular|\/cir/i.test(h)) continue;
+      if (!/\.pdf|\/circular\/|\/cir/i.test(h)) continue;
       var full;
       try { full = new URL(h, BB_CIRC).href; } catch(e){ continue; }
       if (seen[full]) continue;
+      var t = clean(as[i].textContent);
+      if (GEN.test(t) || t.length < 8){
+        t = '';
+        var row = as[i].closest ? as[i].closest('tr,li,article') : null;
+        if (row){
+          var cells = row.children, parts = [];
+          for (var c = 0; c < cells.length; c++){
+            var ct = clean(cells[c].textContent);
+            if (ct && !GEN.test(ct) && ct.length < 250) parts.push(ct);
+          }
+          t = parts.join(' — ');
+        }
+      }
+      if (!t || GEN.test(t)){
+        var fn = decodeURIComponent(full.split('?')[0].split('/').pop() || '').replace(/\.pdf$/i, '').replace(/[_-]+/g, ' ').trim();
+        t = fn;
+      }
+      if (!t || t.length < 6 || GEN.test(t)) continue;
       seen[full] = 1;
       out.push({title:t, link:full, src:'', dom:'', time:0, l:'en', plain:true});
       if (out.length >= 15) break;
